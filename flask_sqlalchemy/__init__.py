@@ -686,6 +686,7 @@ class SQLAlchemy(object):
     def __init__(self, app=None,
                  use_native_unicode=True,
                  session_options=None,
+                 engine_options=None,
                  model_class=Model):
         self.use_native_unicode = use_native_unicode
         self.engine_options = engine_options
