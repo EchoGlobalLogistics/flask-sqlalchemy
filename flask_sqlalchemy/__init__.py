@@ -169,6 +169,10 @@ class SignallingSession(SessionBase):
                 return state.db.get_engine(self.app, bind=bind_key)
         return SessionBase.get_bind(self, mapper, clause)
 
+    def add(self, instance, **kwargs):
+        SessionBase.add(self, instance, **kwargs)
+        return instance
+
 
 class _SessionSignalEvents(object):
 
