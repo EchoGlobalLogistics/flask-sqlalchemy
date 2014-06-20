@@ -401,22 +401,22 @@ class BaseQuery(orm.Query):
     standard query as well.
     """
 
-    def get_or_404(self, ident):
+    def get_or_404(self, ident, description=None):
         """Like :meth:`get` but aborts with 404 if not found instead of
         returning `None`.
         """
         rv = self.get(ident)
         if rv is None:
-            abort(404)
+            abort(404, description=None)
         return rv
 
-    def first_or_404(self):
+    def first_or_404(self, description=None):
         """Like :meth:`first` but aborts with 404 if not found instead of
         returning `None`.
         """
         rv = self.first()
         if rv is None:
-            abort(404)
+            abort(404, description=None)
         return rv
 
     def paginate(self, page, per_page=20, error_out=True):
@@ -488,6 +488,7 @@ class _EngineConnector(object):
         with self._lock:
             uri = self.get_uri()
             echo = self._app.config['SQLALCHEMY_ECHO']
+            encoding = self._app.config.get('SQLALCHEMY_ENCODING')
             if (uri, echo) == self._connected_for:
                 return self._engine
             info = make_url(uri)
@@ -496,6 +497,8 @@ class _EngineConnector(object):
             self._sa.apply_driver_hacks(self._app, info, options)
             if echo:
                 options['echo'] = True
+            if encoding:
+                options['encoding'] = encoding
             self._engine = rv = sqlalchemy.create_engine(info, **options)
             if _record_queries(self._app):
                 _EngineDebuggingSignalEvents(self._engine,
