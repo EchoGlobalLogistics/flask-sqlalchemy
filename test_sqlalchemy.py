@@ -26,6 +26,19 @@ def make_todo_model(db):
     return Todo
 
 
+def make_memo_model(db):
+    class Memo(db.Model):
+        __tablename__ = 'memos'
+        id = db.Column('memo_id', db.Integer, primary_key=True)
+        title = db.Column(db.String(60))
+        text = db.Column(db.String)
+
+        def __init__(self, name, text):
+            self.name = name
+            self.text = text
+    return Memo
+
+
 class BasicAppTestCase(unittest.TestCase):
 
     def setUp(self):
@@ -34,6 +47,7 @@ class BasicAppTestCase(unittest.TestCase):
         app.config['TESTING'] = True
         db = sqlalchemy.SQLAlchemy(app)
         self.Todo = make_todo_model(db)
+        self.Memo = make_memo_model(db)
 
         @app.route('/')
         def index():
@@ -165,6 +179,16 @@ class SignallingTestCase(unittest.TestCase):
             self.assertEqual(len(recorded), 1)
             self.assertEqual(recorded[0][0], todo)
             self.assertEqual(recorded[0][1], 'delete')
+            del recorded[:]
+            memo = self.Memo('my note', 'some text')
+            self.db.session.add(memo)
+            todo = self.Todo('Awesome', 'the text')
+            self.db.session.add(todo)
+            self.db.session.commit()
+            self.assertEqual(len(recorded), 2)
+            change_models = sorted(recorded, key=lambda r: r[0].__tablename__)
+            self.assertEqual(change_models[0], (memo, 'insert'))
+            self.assertEqual(change_models[1], (todo, 'insert'))
 
 
 class HelperTestCase(unittest.TestCase):
@@ -430,6 +454,44 @@ class SessionScopingTestCase(unittest.TestCase):
             assert fb not in db.session  # because a new scope is generated on each call
 
 
+class ModelBaseClassTestCase(unittest.TestCase):
+    """Tests for providing a different model base class to the
+    :class:`flaskext.SQLAlchemy` object.
+
+    """
+
+    def setUp(self):
+        # create a new base class for models
+        class MyBaseModel(sqlalchemy.Model):
+            myattribute = 'Test'
+            def return_hello(self):
+                return 'Hello'
+
+        self.app = flask.Flask(__name__)
+        self.app.config['SQLALCHEMY_ENGINE'] = 'sqlite://'
+        self.app.config['TESTING'] = True
+        self.db = sqlalchemy.SQLAlchemy(self.app, model_class=MyBaseModel)
+        self.db.create_all()
+
+    def test_provided_base_class(self):
+        # create two different model subclasses which should inherit the func
+        class User(self.db.Model):
+            name = self.db.Column(self.db.String(10), primary_key=True)
+
+        class House(self.db.Model):
+            address = self.db.Column(self.db.String(10), primary_key=True)
+
+        assert hasattr(User, 'myattribute')
+        assert hasattr(House, 'myattribute')
+        assert User.myattribute == 'Test'
+        assert House.myattribute == 'Test'
+
+        # create instances of the model
+        user = User(name='John')
+        assert user.return_hello() == 'Hello'
+        house = House(address='foo')
+        assert house.return_hello() == 'Hello'
+
 
 class CommitOnTeardownTestCase(unittest.TestCase):
 
@@ -510,6 +572,7 @@ def suite():
     suite.addTest(unittest.makeSuite(SQLAlchemyIncludesTestCase))
     suite.addTest(unittest.makeSuite(RegressionTestCase))
     suite.addTest(unittest.makeSuite(SessionScopingTestCase))
+    suite.addTest(unittest.makeSuite(ModelBaseClassTestCase))
     suite.addTest(unittest.makeSuite(CommitOnTeardownTestCase))
     if flask.signals_available:
         suite.addTest(unittest.makeSuite(SignallingTestCase))

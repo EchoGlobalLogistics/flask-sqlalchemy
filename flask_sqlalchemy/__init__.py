@@ -42,7 +42,7 @@ except ImportError:
     _app_ctx_stack = None
 
 
-__version__ = '2.0-dev'
+__version__ = '2.1-dev'
 
 
 # Which stack should we use?  _app_ctx_stack is new in 0.9
@@ -631,6 +631,25 @@ class SQLAlchemy(object):
        emulates `Table` behavior but is not a class. `db.Table` exposes the
        `Table` interface, but is a function which allows omission of metadata.
 
+     To use a different base class for your models, create a subclass of
+    :class:`Model` and provide it as the `model_class` keyword argument to this
+    function::
+
+        from flaskext.sqlalchemy import Model
+
+        class MyBaseModel(Model):
+            def print_hello(self):
+                print 'Hello'
+
+        app = Flask(__name__)
+        db = SQLAlchemy(app, model_class=MyBaseModel)
+
+        class User(db.Model):
+            name = db.Column(db.String(80))
+
+        user = User(name='John')
+        user.print_hello() # prints 'Hello'
+
     You may also define your own SessionExtension instances as well when
     defining your SQLAlchemy class instance. You may pass your custom instances
     to the `session_extensions` keyword. This can be either a single
@@ -658,12 +677,17 @@ class SQLAlchemy(object):
     .. versionadded:: 0.16
        `scopefunc` is now accepted on `session_options`. It allows specifying
         a custom function which will define the SQLAlchemy session's scoping.
+
+    .. versionadded:: 2.1
+       `model_class` is used as the base class for the declarative base, to
+       allow for user-specified base classes.
     """
 
     def __init__(self, app=None,
                  use_native_unicode=True,
                  session_options=None,
-                 engine_options=None):
+                 engine_options=None,
+                 model_class=Model):
         self.use_native_unicode = use_native_unicode
         self.engine_options = engine_options
 
@@ -675,7 +699,7 @@ class SQLAlchemy(object):
         )
 
         self.session = self.create_scoped_session(session_options)
-        self.Model = self.make_declarative_base()
+        self.Model = self.make_declarative_base(model_class=model_class)
         self._engine_lock = Lock()
 
         if app is not None:
@@ -712,9 +736,14 @@ class SQLAlchemy(object):
         """
         return SignallingSession(self, **options)
 
-    def make_declarative_base(self):
-        """Creates the declarative base."""
-        base = declarative_base(cls=Model, name='Model',
+    def make_declarative_base(self, model_class=Model):
+        """Creates the declarative base.
+
+        .. versionadded:: 2.1
+           `model_class` is used as the base class for the declarative base, to
+           allow for user-specified base classes.
+        """
+        base = declarative_base(cls=model_class, name='Model',
                                 metaclass=_BoundDeclarativeMeta)
         base.query = _QueryProperty(self)
         return base
