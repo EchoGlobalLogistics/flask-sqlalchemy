@@ -169,6 +169,10 @@ class SignallingSession(SessionBase):
                 return state.db.get_engine(self.app, bind=bind_key)
         return SessionBase.get_bind(self, mapper, clause)
 
+    def add(self, instance, **kwargs):
+        SessionBase.add(self, instance, **kwargs)
+        return instance
+
 
 class _SessionSignalEvents(object):
 
@@ -401,22 +405,22 @@ class BaseQuery(orm.Query):
     standard query as well.
     """
 
-    def get_or_404(self, ident):
+    def get_or_404(self, ident, description=None):
         """Like :meth:`get` but aborts with 404 if not found instead of
         returning `None`.
         """
         rv = self.get(ident)
         if rv is None:
-            abort(404)
+            abort(404, description=None)
         return rv
 
-    def first_or_404(self):
+    def first_or_404(self, description=None):
         """Like :meth:`first` but aborts with 404 if not found instead of
         returning `None`.
         """
         rv = self.first()
         if rv is None:
-            abort(404)
+            abort(404, description=None)
         return rv
 
     def paginate(self, page, per_page=20, error_out=True):
@@ -457,11 +461,11 @@ class _QueryProperty(object):
 
 
 def _record_queries(app):
-    if app.debug:
-        return True
     rq = app.config['SQLALCHEMY_RECORD_QUERIES']
     if rq is not None:
         return rq
+    if app.debug:
+        return True
     return bool(app.config.get('TESTING'))
 
 
@@ -488,6 +492,7 @@ class _EngineConnector(object):
         with self._lock:
             uri = self.get_uri()
             echo = self._app.config['SQLALCHEMY_ECHO']
+            encoding = self._app.config.get('SQLALCHEMY_ENCODING')
             if (uri, echo) == self._connected_for:
                 return self._engine
             info = make_url(uri)
@@ -496,6 +501,8 @@ class _EngineConnector(object):
             self._sa.apply_driver_hacks(self._app, info, options)
             if echo:
                 options['echo'] = True
+            if encoding:
+                options['encoding'] = encoding
             self._engine = rv = sqlalchemy.create_engine(info, **options)
             if _record_queries(self._app):
                 _EngineDebuggingSignalEvents(self._engine,
@@ -681,6 +688,7 @@ class SQLAlchemy(object):
                  session_options=None,
                  model_class=Model):
         self.use_native_unicode = use_native_unicode
+        self.engine_options = engine_options
 
         if session_options is None:
             session_options = {}
@@ -833,6 +841,9 @@ class SQLAlchemy(object):
             unu = self.use_native_unicode
         if not unu:
             options['use_native_unicode'] = False
+
+        if self.engine_options:
+            options.update(self.engine_options)
 
     @property
     def engine(self):
